@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Agenda médica y dental. Reduce los no-shows y gestiona tus citas fácilmente.">
+    <title>SaaS Agenda Médica y Dental - Únete a la beta</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Configuración para Dark Mode manual -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#050505',
+                            card: '#0a0a0a',
+                            border: 'rgba(255,255,255,0.1)'
+                        }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-10px)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        
+        /* Grid background que se adapta al tema */
+        .bg-grid-pattern {
+            background-image: linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+        .dark .bg-grid-pattern {
+            background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+
+        /* Animaciones para el "Video" del DOM */
+        @keyframes cursorAnim {
+            0% { top: 90%; left: 85%; opacity: 0; }
+            5% { top: 90%; left: 85%; opacity: 1; }
+            /* Mover al centro de la cita de las 09:00 */
+            15% { top: 160px; left: 25%; transform: scale(1); }
+            20% { top: 160px; left: 25%; transform: scale(0.85); }
+            /* Arrastrar hacia abajo a las 10:00 */
+            40% { top: 260px; left: 25%; transform: scale(0.85); }
+            45% { top: 260px; left: 25%; transform: scale(1); }
+            /* Mover hacia el badge de estado para confirmar */
+            60% { top: 218px; left: 42%; transform: scale(1); }
+            65% { top: 218px; left: 42%; transform: scale(0.85); }
+            70% { top: 218px; left: 42%; transform: scale(1); }
+            /* Salir */
+            90% { top: 90%; left: 85%; opacity: 1; }
+            95% { top: 90%; left: 85%; opacity: 0; }
+            100% { top: 90%; left: 85%; opacity: 0; }
+        }
+        @keyframes cardAnim {
+            0%, 15% { top: 100px; transform: scale(1); box-shadow: none; z-index: 20; }
+            20% { top: 100px; transform: scale(1.03); box-shadow: 0 15px 30px -5px rgba(20,184,166,0.3); z-index: 30; }
+            40% { top: 200px; transform: scale(1.03); box-shadow: 0 15px 30px -5px rgba(20,184,166,0.3); z-index: 30; }
+            45%, 100% { top: 200px; transform: scale(1); box-shadow: none; z-index: 20; }
+        }
+        @keyframes pendingFade {
+            0%, 64% { opacity: 1; transform: scale(1); }
+            65%, 100% { opacity: 0; transform: scale(0.95); }
+        }
+        @keyframes successFade {
+            0%, 64% { opacity: 0; transform: scale(0.95); }
+            65%, 100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes progressAnim {
+            0% { width: 0%; }
+            100% { width: 100%; }
+        }
+        @keyframes scrubAnim {
+            0% { left: 0%; }
+            100% { left: 100%; }
+        }
+    </style>
+</head>
+<body class="font-sans antialiased bg-slate-50 text-gray-900 dark:bg-dark-bg dark:text-gray-300 transition-colors duration-300 selection:bg-teal-500 selection:text-white overflow-x-hidden">
+
+    <!-- Fondos decorativos -->
+    <div class="fixed inset-0 z-[-1] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(20,184,166,0.15),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(20,184,166,0.15),transparent)] pointer-events-none transition-colors duration-300"></div>
+    <div class="fixed inset-0 z-[-2] bg-grid-pattern [mask-image:linear-gradient(to_bottom,black,transparent)] dark:[mask-image:linear-gradient(to_bottom,white,transparent)] pointer-events-none transition-colors duration-300"></div>
+
+    <header class="fixed top-4 left-1/2 -translate-x-1/2 w-[95%] max-w-5xl z-50 bg-white/80 dark:bg-dark-card/80 backdrop-blur-xl border border-gray-200 dark:border-dark-border rounded-2xl shadow-lg dark:shadow-2xl transition-colors duration-300">
+        <div class="px-4 sm:px-6 h-14 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <!-- Logo Ícono -->
+                <div class="relative flex items-center justify-center w-8 h-8 rounded-lg bg-teal-50 dark:bg-gradient-to-br dark:from-teal-400/20 dark:to-cyan-500/20 border border-teal-100 dark:border-teal-500/30">
+                    <svg class="w-5 h-5 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                </div>
+                <span class="text-lg font-bold tracking-tight text-gray-900 dark:text-white transition-colors duration-300">Medi<span class="text-teal-600 dark:text-transparent dark:bg-clip-text dark:bg-gradient-to-r dark:from-teal-400 dark:to-cyan-500">Sync</span></span>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <!-- Theme Toggle Button -->
+                <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 focus:outline-none rounded-lg text-sm p-2 transition-colors" aria-label="Cambiar tema">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                </button>
+                
+                <a href="#registro" class="hidden sm:inline-flex items-center justify-center px-4 py-1.5 text-sm font-semibold text-white dark:text-black transition-all bg-gray-900 dark:bg-white rounded-lg hover:bg-gray-800 dark:hover:bg-gray-200 focus:outline-none">
+                    Acceso Anticipado
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section class="relative pt-32 pb-20 md:pt-48 md:pb-32 px-4 sm:px-6 lg:px-8 text-center max-w-5xl mx-auto flex flex-col items-center">
+            
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20 text-teal-700 dark:text-teal-400 text-xs font-medium tracking-wide mb-8 shadow-sm dark:shadow-[0_0_15px_rgba(20,184,166,0.2)] transition-colors">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                </span>
+                Lista de espera abierta
+            </div>
+            
+            <h1 class="text-5xl md:text-6xl lg:text-7xl font-extrabold text-gray-900 dark:text-white tracking-tighter mb-6 leading-[1.1] transition-colors">
+                Agenda médica y dental <br class="hidden md:block"/> 
+                <span class="text-transparent bg-clip-text bg-gradient-to-r from-teal-600 to-cyan-600 dark:from-teal-400 dark:via-cyan-400 dark:to-blue-500">en piloto automático</span>
+            </h1>
+            
+            <p class="mt-4 text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-10 font-light leading-relaxed transition-colors">
+                Reduce hasta 40% los "no-shows" y libera horas de tu día. Un ecosistema inteligente con confirmaciones 1-clic y gestión sin fricciones. 
+            </p>
+            
+            <div class="flex flex-col sm:flex-row justify-center gap-4 w-full sm:w-auto">
+                <a href="#registro" class="inline-flex items-center justify-center px-8 py-4 text-base font-bold text-white dark:text-black transition-all bg-gradient-to-r from-teal-500 to-cyan-600 dark:from-teal-400 dark:to-cyan-500 rounded-xl hover:scale-105 shadow-lg dark:hover:shadow-[0_0_30px_rgba(20,184,166,0.4)] focus:outline-none">
+                    Únete a la beta gratis
+                    <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                </a>
+            </div>
+        </section>
+
+        <!-- Video Simulation Section -->
+        <section class="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 z-10 pb-24">
+            <div class="rounded-2xl border border-gray-200 dark:border-dark-border bg-white/50 dark:bg-dark-card/50 p-2 shadow-2xl backdrop-blur-md relative transition-colors duration-300">
+                <!-- Luces decorativas (solo visibles en dark mode) -->
+                <div class="hidden dark:block absolute -top-10 -right-10 w-64 h-64 bg-teal-500/20 rounded-full blur-[80px] pointer-events-none"></div>
+                <div class="hidden dark:block absolute -bottom-10 -left-10 w-64 h-64 bg-blue-500/20 rounded-full blur-[80px] pointer-events-none"></div>
+                
+                <!-- Interfaz simulada con formato Video Player -->
+                <div class="bg-gray-50 dark:bg-[#0f1115] rounded-xl relative flex flex-col border border-gray-200 dark:border-white/5 overflow-hidden transition-colors h-[500px] md:h-[600px] shadow-inner group">
+                    
+                    <!-- Top Bar OS -->
+                    <div class="h-10 bg-gray-100 dark:bg-[#1a1d24] border-b border-gray-200 dark:border-white/5 flex items-center px-4 gap-2 transition-colors z-10">
+                        <div class="w-3 h-3 rounded-full bg-red-400/90 dark:bg-red-500/80"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-400/90 dark:bg-yellow-500/80"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-400/90 dark:bg-green-500/80"></div>
+                        <div class="mx-auto h-5 w-48 bg-white dark:bg-black/20 rounded-md border border-gray-200 dark:border-white/5 text-[10px] text-center text-gray-400 flex items-center justify-center font-mono">medisync.app/demo</div>
+                    </div>
+
+                    <div class="flex flex-1 overflow-hidden relative">
+                        
+                        <svg class="absolute w-7 h-7 z-[60] drop-shadow-xl text-black dark:text-white" style="animation: cursorAnim 8s cubic-bezier(0.4, 0, 0.2, 1) infinite; pointer-events: none; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));" fill="currentColor" viewBox="0 0 24 24" stroke="white" stroke-width="1.5">
+                            <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 01.35-.15h6.87c.45 0 .67-.54.35-.85L6.35 2.85a.5.5 0 00-.85.36z" />
+                        </svg>
+
+                        <!-- Sidebar Izquierdo -->
+                        <div class="hidden md:flex w-16 lg:w-48 bg-white dark:bg-[#15171e] border-r border-gray-200 dark:border-white/5 flex-col py-4 px-2 lg:px-4 transition-colors z-10">
+                            <div class="hidden lg:flex items-center gap-2 mb-8 px-2">
+                                <svg class="w-5 h-5 text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                <span class="font-bold text-sm text-gray-800 dark:text-white">MediSync</span>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="w-full flex items-center gap-3 bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 p-2 rounded-lg cursor-pointer">
+                                    <svg class="w-5 h-5 flex-shrink-0 mx-auto lg:mx-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                    <span class="hidden lg:block text-sm font-medium">Agenda</span>
+                                </div>
+                                <div class="w-full flex items-center gap-3 text-gray-500 dark:text-gray-400 p-2 rounded-lg">
+                                    <svg class="w-5 h-5 flex-shrink-0 mx-auto lg:mx-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                    <span class="hidden lg:block text-sm font-medium">Pacientes</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Main Content Área -->
+                        <div class="flex-1 flex flex-col min-w-0 z-10">
+                            <!-- Cabecera del calendario -->
+                            <div class="h-16 border-b border-gray-200 dark:border-white/5 px-4 lg:px-8 flex items-center justify-between bg-white dark:bg-[#15171e] transition-colors">
+                                <h2 class="text-lg font-bold text-gray-800 dark:text-white">Hoy, 15 Nov</h2>
+                                <button class="bg-teal-500 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm flex items-center gap-1">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                    <span class="hidden sm:inline">Nueva Cita</span>
+                                </button>
+                            </div>
+
+                            <!-- Grid del Calendario Animado -->
+                            <div class="flex-1 overflow-hidden relative bg-gray-50 dark:bg-transparent transition-colors">
+                                <div class="absolute inset-0 p-4 lg:p-8">
+                                    <div class="relative w-full h-full">
+                                        
+                                        <!-- Líneas de tiempo -->
+                                        <div class="absolute w-full flex items-center text-xs text-gray-400 dark:text-gray-500 top-[100px]">
+                                            <span class="w-12 text-right pr-4">09:00</span>
+                                            <div class="flex-1 border-t border-gray-200 dark:border-white/5"></div>
+                                        </div>
+                                        <div class="absolute w-full flex items-center text-xs text-gray-400 dark:text-gray-500 top-[200px]">
+                                            <span class="w-12 text-right pr-4">10:00</span>
+                                            <div class="flex-1 border-t border-gray-200 dark:border-white/5"></div>
+                                        </div>
+                                        <div class="absolute w-full flex items-center text-xs text-gray-400 dark:text-gray-500 top-[300px]">
+                                            <span class="w-12 text-right pr-4">11:00</span>
+                                            <div class="flex-1 border-t border-gray-200 dark:border-white/5"></div>
+                                        </div>
+
+                                        <!-- Cita Animada (Actor Principal) -->
+                                        <div class="absolute left-14 right-4 lg:left-16 lg:w-[45%] h-[90px] bg-white dark:bg-teal-900/40 border-l-4 border-teal-500 rounded-r-lg p-3 shadow-md dark:border-teal-400/50 transition-all z-20 overflow-hidden" style="animation: cardAnim 8s cubic-bezier(0.4, 0, 0.2, 1) infinite;">
+                                            
+                                            <div class="flex justify-between items-start">
+                                                <div class="text-[10px] lg:text-xs font-bold text-teal-600 dark:text-teal-300 uppercase">Tratamiento Conducto</div>
+                                                
+                                                <!-- Status Badge Dinámico -->
+                                                <div class="relative w-20 h-5">
+                                                    <!-- Estado 1: Reagendando -->
+                                                    <div class="absolute inset-0 flex items-center justify-center gap-1 bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 text-[9px] font-bold rounded-md border border-yellow-200 dark:border-yellow-500/30" style="animation: pendingFade 8s linear infinite;">
+                                                        <div class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></div>
+                                                        Moviendo...
+                                                    </div>
+                                                    <!-- Estado 2: Confirmado -->
+                                                    <div class="absolute inset-0 flex items-center justify-center gap-1 bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 text-[9px] font-bold rounded-md border border-green-200 dark:border-green-500/30" style="animation: successFade 8s linear infinite;">
+                                                        <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                        Confirmado
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="text-sm font-bold text-gray-900 dark:text-white mt-1">Laura Martínez</div>
+                                            <div class="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">Notificación vía WhatsApp automática</div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Video Controls Overlay -->
+                        <div class="absolute bottom-0 left-0 right-0 h-14 bg-black/60 dark:bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center px-4 gap-4 z-50">
+                            <!-- Play Icon -->
+                            <button class="text-white hover:text-teal-400 transition-colors">
+                                <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                            
+                            <span class="text-xs font-mono text-gray-300">00:00 / 00:08</span>
+                            
+                            <!-- Timeline Scrubber -->
+                            <div class="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden relative group">
+                                <div class="absolute left-0 top-0 bottom-0 bg-teal-500 rounded-full" style="animation: progressAnim 8s linear infinite;"></div>
+                                <!-- Handle -->
+                                <div class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-100 shadow-[0_0_10px_rgba(255,255,255,0.8)]" style="animation: scrubAnim 8s linear infinite;"></div>
+                            </div>
+                            
+                            <!-- Fullscreen Icon -->
+                            <button class="text-white hover:text-teal-400 transition-colors">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path></svg>
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sección Explicativa "Pasos Visuales" -->
+        <section class="py-24 relative border-t border-gray-200 dark:border-white/5 bg-white dark:bg-[#0a0a0a]/50 transition-colors">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16 md:mb-24">
+                    <h2 class="text-3xl font-bold text-gray-900 dark:text-white sm:text-4xl tracking-tight transition-colors">Crecemos contigo, <br class="sm:hidden"/>sin dolores de cabeza</h2>
+                    <p class="mt-4 text-lg text-gray-600 dark:text-gray-400 max-w-2xl mx-auto transition-colors">No necesitas ser un experto en tecnología. Diseñamos herramientas intuitivas que resuelven tus problemas diarios, como si usaras las apps de tu celular.</p>
+                </div>
+
+                <div class="relative space-y-20 lg:space-y-32">
+                    
+                    <!-- Línea conectora de fondo (Solo Desktop) -->
+                    <div class="hidden md:block absolute left-1/2 top-10 bottom-10 w-0.5 bg-gradient-to-b from-teal-500 via-blue-500 to-purple-500 -translate-x-1/2 opacity-20 dark:opacity-40"></div>
+
+                    <!-- Paso 1: Hoy (Enfocado en Organización - Mockup WhatsApp) -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 lg:gap-16 group relative">
+                        <!-- Nodo Timeline -->
+                        <div class="hidden md:flex absolute left-1/2 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-[#0a0a0a] border-4 border-teal-500 rounded-full z-10 shadow-[0_0_15px_rgba(20,184,166,0.5)]"></div>
+
+                        <div class="w-full md:w-1/2 flex justify-center md:justify-end pr-0 md:pr-8">
+                            <div class="relative w-full max-w-sm">
+                                <div class="absolute inset-0 bg-teal-200 dark:bg-teal-500/20 rounded-[2rem] blur-2xl transform group-hover:scale-105 transition-transform duration-700"></div>
+                                <div class="relative bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-6 rounded-[2rem] shadow-xl transition-all hover:-translate-y-2">
+                                    
+                                    <!-- Mini-Mockup: WhatsApp / Ficha -->
+                                    <div class="bg-gray-50 dark:bg-black/50 border border-gray-100 dark:border-white/5 rounded-2xl p-4 mb-5 relative overflow-hidden">
+                                        <!-- Patrón fondo WA -->
+                                        <div class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style="background-image: url('data:image/svg+xml,%3Csvg width=\'20\' height=\'20\' viewBox=\'0 0 20 20\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23000000\' fill-opacity=\'1\' fill-rule=\'evenodd\'%3E%3Ccircle cx=\'3\' cy=\'3\' r=\'3\'/%3E%3Ccircle cx=\'13\' cy=\'13\' r=\'3\'/%3E%3C/g%3E%3C/svg%3E');"></div>
+                                        
+                                        <!-- Burbuja de mensaje -->
+                                        <div class="bg-white dark:bg-[#1e2329] p-3 rounded-2xl rounded-tl-sm shadow-sm max-w-[90%] relative z-10 border border-gray-100 dark:border-white/5">
+                                            <p class="text-[11px] text-gray-800 dark:text-gray-200 leading-snug">
+                                                Hola Carlos, recuerda tu cita con la <strong class="text-teal-600 dark:text-teal-400">Dra. Martínez</strong> mañana a las 10:00 AM. 🦷
+                                            </p>
+                                            <div class="mt-3 flex gap-2">
+                                                <button class="flex-1 bg-teal-500 text-white text-[10px] font-bold py-1.5 rounded-lg text-center cursor-default shadow-sm shadow-teal-500/30">Sí, confirmo ✅</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Adiós al cuaderno</h4>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Tu agenda, pacientes y confirmaciones en un solo lugar y fácil de entender.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-full md:w-1/2 pl-0 md:pl-8">
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 text-[10px] font-bold tracking-widest mb-4 border border-teal-200 dark:border-teal-500/20 uppercase">
+                                Disponible Hoy
+                            </div>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4 transition-colors">Organiza tu día y elimina las ausencias</h3>
+                            <p class="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                                Deja que el sistema trabaje por ti. Al agendar a un paciente, MediSync le enviará un WhatsApp automático. Si el paciente confirma, tu agenda se actualiza sola; si cancela, el espacio se libera al instante.
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-teal-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Recordatorios Auto</span>
+                                <span class="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-teal-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Sin instalar nada</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Paso 2: Próximo (Enfocado en Reservas y Dinero - Mockup Widget) -->
+                    <div class="flex flex-col md:flex-row-reverse items-center gap-8 lg:gap-16 group relative">
+                        <!-- Nodo Timeline -->
+                        <div class="hidden md:flex absolute left-1/2 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-[#0a0a0a] border-4 border-blue-500 rounded-full z-10 shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>
+
+                        <div class="w-full md:w-1/2 flex justify-center md:justify-start pl-0 md:pl-8">
+                            <div class="relative w-full max-w-sm">
+                                <div class="absolute inset-0 bg-blue-200 dark:bg-blue-500/20 rounded-[2rem] blur-2xl transform group-hover:scale-105 transition-transform duration-700"></div>
+                                <div class="relative bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-6 rounded-[2rem] shadow-xl transition-all hover:-translate-y-2">
+                                    
+                                    <!-- Mini-Mockup: Widget de Reserva -->
+                                    <div class="bg-gray-50 dark:bg-black/50 border border-gray-100 dark:border-white/5 rounded-2xl p-4 mb-5">
+                                        <div class="flex justify-between items-center mb-3">
+                                            <div class="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Elige tu horario</div>
+                                            <div class="flex gap-1">
+                                                <div class="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                                                <div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                                <div class="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 mb-3">
+                                            <div class="text-[11px] text-center py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-400 dark:text-gray-500 line-through">09:00 AM</div>
+                                            <div class="text-[11px] font-bold text-center py-2 bg-blue-50 dark:bg-blue-500/20 border border-blue-200 dark:border-blue-500/30 rounded-lg text-blue-700 dark:text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.1)]">10:30 AM</div>
+                                        </div>
+                                        <button class="w-full bg-gray-900 dark:bg-white text-white dark:text-black text-[11px] font-bold py-2.5 rounded-xl flex justify-center items-center gap-2 cursor-default">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path></svg>
+                                            Pagar y Reservar
+                                        </button>
+                                    </div>
+
+                                    <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Ingresos seguros</h4>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Los pacientes eligen su horario y te pagan antes de pisar el consultorio.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-full md:w-1/2 pr-0 md:pr-8">
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-[10px] font-bold tracking-widest mb-4 border border-blue-200 dark:border-blue-500/20 uppercase">
+                                Muy Pronto
+                            </div>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4 transition-colors">Reservas 24/7 y cobros en línea</h3>
+                            <p class="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                                Dale a tus pacientes un enlace para tu Instagram o página web donde podrán ver tus horarios libres. Para asegurar la cita, podrán usar su tarjeta y tú recibirás el dinero directo en tu cuenta.
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Link en Instagram</span>
+                                <span class="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Menos llamadas</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Paso 3: Futuro (Enfocado en Expansión - Mockup Video/Receta) -->
+                    <div class="flex flex-col md:flex-row items-center gap-8 lg:gap-16 group relative">
+                        <!-- Nodo Timeline -->
+                        <div class="hidden md:flex absolute left-1/2 top-1/2 -translate-y-1/2 -translate-x-1/2 w-8 h-8 bg-white dark:bg-[#0a0a0a] border-4 border-purple-500 rounded-full z-10 shadow-[0_0_15px_rgba(168,85,247,0.5)]"></div>
+
+                        <div class="w-full md:w-1/2 flex justify-center md:justify-end pr-0 md:pr-8">
+                            <div class="relative w-full max-w-sm">
+                                <div class="absolute inset-0 bg-purple-200 dark:bg-purple-500/20 rounded-[2rem] blur-2xl transform group-hover:scale-105 transition-transform duration-700"></div>
+                                <div class="relative bg-white dark:bg-[#111] border border-gray-200 dark:border-white/10 p-6 rounded-[2rem] shadow-xl transition-all hover:-translate-y-2">
+                                    
+                                    <!-- Mini-Mockup: Telemedicina & Receta -->
+                                    <div class="bg-gray-50 dark:bg-black/50 border border-gray-100 dark:border-white/5 rounded-2xl p-2 mb-5">
+                                        <div class="relative aspect-[4/3] bg-gray-200 dark:bg-gray-800 rounded-xl overflow-hidden mb-2 border border-gray-300 dark:border-gray-700">
+                                            <!-- Fake Video Background -->
+                                            <div class="absolute inset-0 bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/40 dark:to-indigo-900/40 opacity-50"></div>
+                                            <!-- Icono Doctor -->
+                                            <svg class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 text-gray-400 dark:text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                            
+                                            <!-- Picture in Picture (Paciente) -->
+                                            <div class="absolute bottom-2 right-2 w-12 h-16 bg-gray-300 dark:bg-gray-700 border-2 border-white dark:border-gray-800 rounded-lg overflow-hidden shadow-md">
+                                                <svg class="absolute bottom-[-5px] left-1/2 -translate-x-1/2 w-8 h-8 text-gray-500 dark:text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                            </div>
+                                            <!-- Controles de llamada -->
+                                            <div class="absolute bottom-3 left-3 flex gap-1.5">
+                                                <div class="w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-md"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></div>
+                                                <div class="w-6 h-6 bg-gray-900/50 backdrop-blur-sm text-white rounded-full flex items-center justify-center shadow-md"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M21 6h-7.59l3.29-3.29L16 1.3 11.71 5.58 16 9.87l.71-.7-3.29-3.29H21v14H3V6h6v-2H1v18h22V6z"/></svg></div>
+                                            </div>
+                                        </div>
+                                        <!-- Notificación de Receta -->
+                                        <div class="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 text-purple-700 dark:text-purple-300 text-[10px] p-2 rounded-lg flex items-center justify-between shadow-sm">
+                                            <div class="flex items-center gap-1.5 font-medium">
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                                Receta PDF enviada
+                                            </div>
+                                            <span class="text-[9px] bg-purple-200 dark:bg-purple-500/30 px-1.5 py-0.5 rounded text-purple-800 dark:text-purple-200">100% Legal</span>
+                                        </div>
+                                    </div>
+
+                                    <h4 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Clínica sin fronteras</h4>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Atiende pacientes donde sea, sin salir del sistema, y envíales recetas directas a su celular.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="w-full md:w-1/2 pl-0 md:pl-8">
+                            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 text-[10px] font-bold tracking-widest mb-4 border border-purple-200 dark:border-purple-500/20 uppercase">
+                                En el Horizonte
+                            </div>
+                            <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-4 transition-colors">Tu consultorio en cualquier lugar</h3>
+                            <p class="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+                                Lleva tu práctica al siguiente nivel. Atiende consultas rápidas o seguimientos médicos por videollamada. Al terminar, con un solo botón, el paciente recibirá su receta médica digital en formato PDF.
+                            </p>
+                            <div class="flex flex-wrap gap-2">
+                                <span class="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-purple-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Videollamadas HD</span>
+                                <span class="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-purple-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg> Recetas al instante</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Formulario Lead Capture VIP -->
+        <section id="registro" class="py-24 relative border-t border-gray-200 dark:border-white/5 bg-slate-50 dark:bg-transparent transition-colors">
+            
+            <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div class="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-3xl dark:backdrop-blur-xl overflow-hidden shadow-xl dark:shadow-2xl transition-colors">
+                    <div class="p-8 sm:p-12 text-center border-b border-gray-100 dark:border-white/10 bg-white dark:bg-transparent transition-colors">
+                        <h2 class="text-3xl font-bold text-gray-900 dark:text-white tracking-tight mb-2 transition-colors">Reserva tu lugar en la Beta</h2>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm transition-colors">El acceso es gratuito por tiempo limitado para los primeros adoptantes. Ayúdanos a construir la herramienta que realmente necesitas.</p>
+                    </div>
+                    
+                    <div class="p-8 sm:p-12 bg-gray-50 dark:bg-dark-bg/40 transition-colors">
+                        <form id="beta-form" action="YOUR_FORMSPREE_URL" method="POST" class="space-y-5">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label for="nombre" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide transition-colors">Nombre Completo *</label>
+                                    <input type="text" id="nombre" name="nombre" required class="w-full px-4 py-3 bg-white dark:bg-dark-card border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-1 dark:focus:ring-teal-500 dark:focus:border-teal-500 transition-colors shadow-sm dark:shadow-none" placeholder="Dra. Jane Doe">
+                                </div>
+                                <div>
+                                    <label for="clinica" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide transition-colors">Clínica/Consultorio *</label>
+                                    <input type="text" id="clinica" name="clinica" required class="w-full px-4 py-3 bg-white dark:bg-dark-card border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-1 dark:focus:ring-teal-500 dark:focus:border-teal-500 transition-colors shadow-sm dark:shadow-none" placeholder="MedCentro">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label for="email" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide transition-colors">Correo *</label>
+                                    <input type="email" id="email" name="email" required class="w-full px-4 py-3 bg-white dark:bg-dark-card border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-1 dark:focus:ring-teal-500 dark:focus:border-teal-500 transition-colors shadow-sm dark:shadow-none" placeholder="hola@clinica.com">
+                                </div>
+                                <div>
+                                    <label for="whatsapp" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide transition-colors">WhatsApp</label>
+                                    <input type="tel" id="whatsapp" name="whatsapp" class="w-full px-4 py-3 bg-white dark:bg-dark-card border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-1 dark:focus:ring-teal-500 dark:focus:border-teal-500 transition-colors shadow-sm dark:shadow-none" placeholder="+1 (555) 000-0000">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label for="dolor" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wide transition-colors">Mayor reto actual con la agenda *</label>
+                                <textarea id="dolor" name="dolor" rows="3" required class="w-full px-4 py-3 bg-white dark:bg-dark-card border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:focus:ring-1 dark:focus:ring-teal-500 dark:focus:border-teal-500 transition-colors resize-none shadow-sm dark:shadow-none" placeholder="Ej: Los pacientes olvidan sus citas..."></textarea>
+                            </div>
+
+                            <button type="submit" class="w-full mt-4 py-4 px-6 rounded-xl shadow-lg font-bold text-white dark:text-black bg-teal-600 hover:bg-teal-700 dark:bg-gradient-to-r dark:from-teal-400 dark:to-cyan-500 hover:scale-[1.02] dark:hover:shadow-[0_0_20px_rgba(20,184,166,0.3)] transition-all focus:outline-none">
+                                Solicitar Acceso Exclusivo
+                            </button>
+                        </form>
+
+                        <!-- Mensaje de Éxito Oculto -->
+                        <div id="success-message" class="hidden text-center py-8">
+                            <div class="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-teal-100 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/30 mb-4 transition-colors">
+                                <svg class="h-8 w-8 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2 transition-colors">¡Bienvenido a bordo!</h3>
+                            <p class="text-gray-600 dark:text-gray-400 text-sm transition-colors">Hemos recibido tus datos. Te contactaremos muy pronto con tu invitación personal.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Minimalista -->
+        <section class="py-24 border-t border-gray-200 dark:border-white/5 bg-white dark:bg-dark-card transition-colors">
+            <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white tracking-tight transition-colors">Preguntas Frecuentes</h2>
+                </div>
+                <div class="space-y-3">
+                    <details class="group bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl transition-colors" open>
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none p-5 text-gray-800 dark:text-gray-200 transition-colors">
+                            <span>¿Qué incluye la Beta Gratuita?</span>
+                            <span class="transition group-open:rotate-180 text-gray-400 dark:text-gray-500">
+                                <svg fill="none" height="20" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="text-gray-600 dark:text-gray-400 text-sm p-5 pt-0 leading-relaxed border-t border-gray-200 dark:border-white/5 mt-1 transition-colors">
+                            Tendrás acceso completo e ilimitado al módulo de agenda (MVP), fichas de pacientes y recordatorios por un periodo garantizado, sin cargos ocultos ni necesidad de tarjeta de crédito.
+                        </div>
+                    </details>
+                    
+                    <details class="group bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl transition-colors">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none p-5 text-gray-800 dark:text-gray-200 transition-colors">
+                            <span>¿Es difícil migrar mis datos actuales?</span>
+                            <span class="transition group-open:rotate-180 text-gray-400 dark:text-gray-500">
+                                <svg fill="none" height="20" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="text-gray-600 dark:text-gray-400 text-sm p-5 pt-0 leading-relaxed border-t border-gray-200 dark:border-white/5 mt-1 transition-colors">
+                            No. El onboarding está diseñado para que configures todo en menos de 10 minutos. Pronto habilitaremos importadores de CSV masivos.
+                        </div>
+                    </details>
+
+                    <details class="group bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl transition-colors">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none p-5 text-gray-800 dark:text-gray-200 transition-colors">
+                            <span>¿Qué pasa con la privacidad (HIPAA)?</span>
+                            <span class="transition group-open:rotate-180 text-gray-400 dark:text-gray-500">
+                                <svg fill="none" height="20" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="20"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <div class="text-gray-600 dark:text-gray-400 text-sm p-5 pt-0 leading-relaxed border-t border-gray-200 dark:border-white/5 mt-1 transition-colors">
+                            Arquitectura "Security-First". Empleamos cifrado AES-256 en reposo y tránsito. Nadie fuera de tu clínica puede acceder a los historiales clínicos.
+                        </div>
+                    </details>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer Clean -->
+    <footer class="border-t border-gray-200 dark:border-white/10 py-10 bg-white dark:bg-dark-bg text-center transition-colors">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col items-center">
+            <div class="flex items-center gap-2 mb-4 opacity-70 grayscale hover:grayscale-0 hover:opacity-100 transition-all cursor-pointer">
+                <svg class="w-4 h-4 text-teal-600 dark:text-teal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                <span class="text-sm font-bold text-gray-900 dark:text-white tracking-widest uppercase transition-colors">MediSync</span>
+            </div>
+            <p class="text-xs text-gray-500 dark:text-gray-600 transition-colors">&copy; <span id="year"></span> MediSync OS. Todos los derechos reservados.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Actualizar el año
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Lógica de Theme Toggle (Light / Dark Mode)
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+        // Configuración inicial
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            lightIcon.classList.remove('hidden');
+        } else {
+            document.documentElement.classList.remove('dark');
+            darkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            darkIcon.classList.toggle('hidden');
+            lightIcon.classList.toggle('hidden');
+
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+            }
+        });
+
+        // Simulación envío del formulario
+        const form = document.getElementById('beta-form');
+        const successMsg = document.getElementById('success-message');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault(); 
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            // Loading state
+            submitBtn.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-current inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Procesando...';
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-80', 'cursor-not-allowed');
+
+            setTimeout(() => {
+                form.style.display = 'none';
+                successMsg.classList.remove('hidden');
+            }, 1200);
+        });
+    </script>
+</body>
+</html>
